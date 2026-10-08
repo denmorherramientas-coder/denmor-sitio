@@ -176,3 +176,4 @@ export default async (req) => {
 };
 
 export const config = { path: ['/api/pedido', '/api/pedido/enviado', '/api/pedidos', '/api/pedidos/*', '/pedido/*'] };
+netlify/functions/
