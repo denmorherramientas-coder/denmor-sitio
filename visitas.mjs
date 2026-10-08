@@ -155,3 +155,4 @@ export default async (req) => {
 };
 
 export const config = { path: ['/api/visita', '/api/visitas', '/api/estado'] };
+netlify/functions/
