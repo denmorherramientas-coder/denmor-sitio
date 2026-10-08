@@ -84,3 +84,4 @@ export default async (request, context) => {
 };
 
 export const config = { path: '/p/*' };
+netlify/edge-functions/
