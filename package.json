@@ -1,0 +1,8 @@
+{
+  "name": "denmor-herramientas",
+  "private": true,
+  "description": "Sitio Denmor Herramientas. Las dependencias son solo para las funciones de Netlify.",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

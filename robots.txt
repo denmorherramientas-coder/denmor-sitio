@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /admin/
+Allow: /
+Sitemap: https://denmorherramientas.com/sitemap.xml
+Sitemap: https://denmorherramientas.com/sitemap-productos.xml

@@ -1,0 +1,13 @@
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Fotos de producto para la vista previa al compartir (se convierten a JPG con el Image CDN de Netlify)
+[images]
+  remote_images = ["https://makmex\\.com/img/.*"]
+
+[[headers]]
+  for = "/og-denmor.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
