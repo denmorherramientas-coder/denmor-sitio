@@ -1,3 +1,18 @@
+# Páginas sueltas en la raíz (así GitHub no necesita carpetas)
+/admin            /admin.html      200
+/admin/           /admin.html      200
+/nosotros         /nosotros.html   200
+/nosotros/        /nosotros.html   200
+/nosotros/fachada.jpg   /fachada.jpg   200
+/nosotros/p1.jpg   /p1.jpg   200
+/nosotros/p2.jpg   /p2.jpg   200
+/nosotros/p3.jpg   /p3.jpg   200
+/nosotros/p4.jpg   /p4.jpg   200
+/nosotros/p5.jpg   /p5.jpg   200
+/nosotros/p6.jpg   /p6.jpg   200
+/nosotros/p7.jpg   /p7.jpg   200
+/nosotros/p8.jpg   /p8.jpg   200
+/js/jspdf.umd.min.js  /jspdf.umd.min.js  200
 # Denmor lee el catálogo de makmex.com (CEDIS). Netlify trae estos archivos de makmex.com al momento (status 200 = proxy).
 /sitemap-productos.xml  https://raw.githubusercontent.com/denmorherramientas-coder/denmor-ajustes/main/sitemap-productos.xml  200!
 /ajustes.json  https://raw.githubusercontent.com/denmorherramientas-coder/denmor-ajustes/main/ajustes.json  200!
