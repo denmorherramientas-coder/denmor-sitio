@@ -1,0 +1,21 @@
+{
+  "name": "denmor-ai-operations",
+  "private": true,
+  "type": "module",
+  "description": "DENMOR AI OPERATIONS: empleados digitales de Denmor Herramientas (sitio Netlify aparte del catálogo).",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"tests/*.test.js\"",
+    "dev": "node scripts/servidor-local.mjs",
+    "migrar": "node scripts/migrar.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.132.1",
+    "postgres": "3.4.9"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

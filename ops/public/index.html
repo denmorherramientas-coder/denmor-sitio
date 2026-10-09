@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Denmor AI Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/estilos.css">
+</head>
+<body class="bloqueado">
+<header>
+  <div class="hin">
+    <h1>DENMOR <span>AI</span> OPERATIONS</h1>
+    <nav id="nav">
+      <a href="#tablero" data-s="tablero">Tablero</a>
+      <a href="#whatsapp" data-s="whatsapp">WhatsApp</a>
+      <a href="#ordenes" data-s="ordenes">Órdenes</a>
+      <a href="#agentes" data-s="agentes">Agentes</a>
+      <a href="#aprobaciones" data-s="aprobaciones">Aprobaciones <b id="nAprob" class="cnt" hidden></b></a>
+      <a href="#config" data-s="config">Configuración</a>
+    </nav>
+    <span class="sp"></span>
+    <button id="btnPausa" class="pausa" title="Detiene a todos los agentes de inmediato">Pausar todos los agentes</button>
+    <button id="btnSalir" class="lnk" title="Cerrar sesión">Salir</button>
+  </div>
+  <div id="bandaPausa" class="banda" hidden>⏸ Todos los agentes están en pausa. Nadie responde en WhatsApp ni ejecuta tareas.</div>
+</header>
+
+<main>
+  <!-- TABLERO -->
+  <section id="s-tablero" class="sec" hidden>
+    <h2>Tablero <small id="tabHora"></small></h2>
+    <div class="kpis" id="kpis"></div>
+    <div class="dos">
+      <div class="card"><h3>Agentes</h3><div id="tabAgentes"></div></div>
+      <div class="card"><h3>Pendientes de tu decisión</h3><div id="tabAprob"></div><h3 class="mt">Tareas recientes</h3><div id="tabTareas"></div></div>
+    </div>
+    <div class="card"><h3>Errores recientes</h3><div id="tabErrores"></div></div>
+  </section>
+
+  <!-- WHATSAPP -->
+  <section id="s-whatsapp" class="sec" hidden>
+    <div class="chatwrap">
+      <aside class="lista">
+        <div class="filtros">
+          <input id="wBuscar" type="search" placeholder="Buscar nombre o número">
+          <div class="seg" id="wModo"><button data-m="" class="on">Todas</button><button data-m="asistente">Asistente</button><button data-m="humano">Persona</button></div>
+          <button id="wSim" class="sec2">🧪 Simulador de cliente</button>
+        </div>
+        <div id="wLista" class="items"></div>
+      </aside>
+      <div class="chat" id="wChat">
+        <div class="vacio">Elige una conversación, o abre el simulador para probar al vendedor sin usar WhatsApp.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ÓRDENES -->
+  <section id="s-ordenes" class="sec" hidden>
+    <h2>Órdenes</h2>
+    <div class="card">
+      <label class="lb" for="oTexto">Escribe una instrucción para tu equipo digital</label>
+      <textarea id="oTexto" rows="3" placeholder="Ej.: Revisa qué productos con existencia no tienen foto y prepárame 3 publicaciones de las baterías M18 para esta semana."></textarea>
+      <div class="fila">
+        <select id="oPrioridad"><option value="normal">Prioridad normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select>
+        <button id="oEnviar" class="prim">Enviar orden</button>
+        <span id="oMsg" class="muted"></span>
+      </div>
+    </div>
+    <div class="card"><h3>Órdenes recientes</h3><div id="oLista"></div></div>
+    <div class="card">
+      <h3>Tareas</h3>
+      <div class="fila"><select id="tFiltro"><option value="">Todas</option><option value="pendiente">Pendientes</option><option value="en_proceso">En proceso</option><option value="esperando_aprobacion">Esperando aprobación</option><option value="completada">Completadas</option><option value="fallida">Fallidas</option></select>
+        <details class="nueva"><summary>+ Tarea directa a un agente</summary>
+          <div class="fila"><select id="tAgente"><option value="supervisor">Supervisor web</option><option value="inventarios">Inventarios</option><option value="administrador">Administrador</option><option value="marketing">Marketing</option><option value="programador">Programador</option><option value="vendedor">Vendedor (seguimiento)</option></select>
+            <input id="tTitulo" placeholder="Título"><select id="tPrioridad"><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option><option value="baja">Baja</option></select></div>
+          <textarea id="tDesc" rows="2" placeholder="Instrucciones (opcional)"></textarea>
+          <button id="tCrear" class="prim">Crear tarea</button>
+        </details>
+      </div>
+      <div id="tLista"></div>
+    </div>
+  </section>
+
+  <!-- AGENTES -->
+  <section id="s-agentes" class="sec" hidden>
+    <h2>Agentes</h2>
+    <div id="aLista" class="agentes"></div>
+    <div class="card"><h3>Reportes</h3><div class="fila"><select id="rFiltro"><option value="">Todos los agentes</option></select></div><div id="rLista"></div></div>
+    <div class="card"><h3>Cotizaciones del vendedor</h3><div id="cLista"></div></div>
+  </section>
+
+  <!-- APROBACIONES -->
+  <section id="s-aprobaciones" class="sec" hidden>
+    <h2>Aprobaciones</h2>
+    <p class="muted">Descuentos, publicaciones, mensajes a varios clientes, cambios de precio y operaciones sensibles esperan tu decisión. Nada de esto se ejecuta sin tu aprobación.</p>
+    <div id="apPend"></div>
+    <div class="card"><h3>Historial</h3><div id="apHist"></div></div>
+  </section>
+
+  <!-- CONFIGURACIÓN -->
+  <section id="s-config" class="sec" hidden>
+    <h2>Configuración</h2>
+    <div class="card"><h3>Estado de conexiones</h3><div id="cfEstado" class="muted">Revisando…</div></div>
+    <div class="card"><h3>Horario de atención <small>(hora de Chihuahua)</small></h3><div id="cfHorario"></div></div>
+    <div class="card"><h3>Tiempos de respuesta <small>(segundos)</small></h3><div id="cfTiempos"></div></div>
+    <div class="card"><h3>Atención humana</h3><div id="cfHumano"></div></div>
+    <div class="card"><h3>Límites y costos</h3><div id="cfLimites"></div></div>
+    <div class="card"><h3>Información del negocio <small>(lo que el vendedor sabe decir)</small></h3><div id="cfNegocio"></div></div>
+    <div class="card"><h3>Bitácora</h3><div id="cfBitacora"></div></div>
+  </section>
+</main>
+
+<!-- INICIO DE SESIÓN -->
+<div id="login" class="login" hidden>
+  <form id="lForm" class="lcard">
+    <h2>DENMOR <span>AI</span> OPERATIONS</h2>
+    <p class="muted">Panel privado. Entra con tu correo autorizado.</p>
+    <label class="lb">Correo<input id="lEmail" type="email" autocomplete="username" required></label>
+    <label class="lb">Contraseña<input id="lPass" type="password" autocomplete="current-password" required></label>
+    <button class="prim" type="submit">Entrar</button>
+    <button id="lLocal" class="sec2" type="button" hidden>Entrar en modo local (pruebas)</button>
+    <p id="lMsg" class="err"></p>
+  </form>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

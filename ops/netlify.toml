@@ -1,0 +1,29 @@
+# DENMOR AI OPERATIONS · sitio de Netlify SEPARADO del catálogo.
+# En Netlify: "Base directory" = ops. El catálogo (raíz del repositorio) no usa nada de esta carpeta.
+
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+  # Sin paso de compilación: Netlify instala las dependencias de package.json y empaqueta las funciones.
+  # Las pruebas (npm test) se corren antes de publicar, en el entorno de desarrollo (necesitan Postgres y Chromium).
+  # Solo vuelve a publicar si cambió algo dentro de ops/
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
+
+[build.environment]
+  NODE_VERSION = "22"
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    Cache-Control = "no-store"
