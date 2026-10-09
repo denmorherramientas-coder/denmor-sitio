@@ -131,7 +131,12 @@ async function cargarListaWa() {
   $('wLista').innerHTML = d.conversaciones.length ? d.conversaciones.map((c) => `<div class="it ${c.id === CHAT ? 'on' : ''}" data-c="${c.id}"><b><span>${esc(c.nombre || c.telefono)}</span><span class="pill ${c.modo === 'humano' ? 'blue' : 'ok'}">${c.modo === 'humano' ? 'Persona' : 'Asistente'}</span></b>
     <small>${c.simulador ? '🧪 ' : ''}${esc(c.telefono)}${c.interesado ? ' · ⭐ interesado' : ''} · ${hace(c.ultimo_entrante || c.ultimo_saliente)}</small><small>${esc((c.ultimo_autor === 'cliente' ? '' : '↪ ') + (c.ultimo_texto || ''))}</small></div>`).join('') : '<p class="muted" style="padding:12px">Sin conversaciones todavía.</p>';
 }
-$('wLista').addEventListener('click', (ev) => { const it = ev.target.closest('[data-c]'); if (it) { CHAT = it.dataset.c; SIM = null; cargarChat(CHAT).catch((e) => toast(e.message)); cargarListaWa(); } });
+$('wLista').addEventListener('click', async (ev) => {
+  const it = ev.target.closest('[data-c]'); if (!it) return;
+  CHAT = it.dataset.c; SIM = null;
+  await cargarChat(CHAT).catch((e) => toast(e.message)); cargarListaWa();
+  if (window.innerWidth <= 820) $('wChat').scrollIntoView({ behavior: 'smooth' }); // en celular, baja al chat
+});
 $('wBuscar').addEventListener('input', () => { clearTimeout(cargarListaWa.t); cargarListaWa.t = setTimeout(cargarListaWa, 300); });
 $('wModo').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; MODO_W = b.dataset.m; $('wModo').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); cargarListaWa(); });
 
