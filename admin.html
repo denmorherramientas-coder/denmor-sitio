@@ -98,7 +98,7 @@ nav button.on{border-bottom-color:var(--red)}
 .tb.ok{background:#1C8A4C}
 .live{display:inline-block;width:12px;height:12px;border-radius:50%;background:#1C8A4C;margin-right:8px;box-shadow:0 0 0 0 rgba(28,138,76,.6);animation:pl 1.6s infinite}
 @keyframes pl{0%{box-shadow:0 0 0 0 rgba(28,138,76,.55)}70%{box-shadow:0 0 0 12px rgba(28,138,76,0)}100%{box-shadow:0 0 0 0 rgba(28,138,76,0)}}
-.kpi.big b{font-size:44px}.kpi.big{border-color:#1C8A4C}
+.kpis.sc .kpi b{font-size:clamp(20px,2.4vw,26px)}.kpi.g{border-color:#1C8A4C}.kpi.g b{color:#1C8A4C}.kpi.big b{font-size:44px}.kpi.big{border-color:#1C8A4C}
 .vbars{display:flex;align-items:flex-end;gap:3px;height:140px;padding-top:6px}.vbars div{flex:1;background:var(--red);border-radius:3px 3px 0 0;min-height:2px;position:relative}
 .vbars div:hover:after{content:attr(data-t);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#111;color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap}
 .vaxis{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);margin-top:4px}
@@ -709,7 +709,7 @@ $('vvNoMe').addEventListener('change',e=>{ if(e.target.checked) LS.set('dn_nocou
 /* ---------- ventas SICAR ---------- */
 // Formato común de una venta: [fechaISO, ticket, clave, cantidad, importe, sucursal]
 const SC_DEF_URL='https://raw.githubusercontent.com/makmexchihuahua-hub/makmex-existencias/main/ventas.json';
-let SC={auto:null,file:null,sucursal:'',dias:30};
+let SC={auto:null,file:null,sucursal:'',dias:30,per:'0'};
 const scUrl=()=>LS.get('dn_sc_url')||SC_DEF_URL;
 const SPEC=`ARCHIVO: ventas.json (en el mismo repositorio donde se sube existencias.json)
 FRECUENCIA: cada 15 minutos, junto con existencias.json
@@ -749,11 +749,11 @@ $('scRe').addEventListener('click',()=>loadSicarAuto());
 async function loadSicarAuto(){ const box=$('scAuto'); box.innerHTML='<p class="muted">Revisando…</p>';
   /* 1) en vivo: función /api/sicar que lee la ventana de MAKMEX (Supabase) */
   const tok=ghCfg().t; let vivoMsg=''; const cred=await scLoad(); scShowCred(!!cred);
-  if(cred||tok){ const r=cred?await probe('/api/sicar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({dias:90},cred))}):await probe('/api/sicar?dias=90',{headers:{Authorization:'Bearer '+tok}});
+  if(cred||tok){ const r=cred?await probe('/api/sicar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({},cred,{dias:0}))}):await probe('/api/sicar?dias=0',{headers:{Authorization:'Bearer '+tok}});
     if(r.ok&&r.j&&r.j.ok){ const j=r.j; const rows=(j.ventas||[]).map(v=>[String(v[0]),String(v[1]),String(v[2]),+v[3]||0,+v[4]||0,'Denmor',String(v[6]||'')]).filter(v=>v[0]&&v[2]);
       SC.auto={rows,dia:j.dias||null,pagos:j.pagos||[],fuente:'auto',vivo:true,estado:j.estado};
       const e=j.estado; const age=e&&e.leido_en?(Date.now()-Date.parse(e.leido_en))/60000:null; const bien=e&&e.ok!==false&&age!=null&&age<15;
-      box.innerHTML=`<div class="chk"><i class="${bien?'ok':'warn'}"></i><div><b>Conectado en vivo</b><small>${rows.length.toLocaleString('es-MX')} líneas de venta (90 días)${e&&e.leido_en?` · la tienda subió datos ${hace(e.leido_en)}`:''}${e&&e.ok===false?` · <span style="color:var(--bad)">el lector de la tienda reporta error: ${esc(e.error||'')}</span>`:''}${!bien&&age!=null&&e.ok!==false?' · si no avanza, revisa que la computadora de Denmor esté prendida con sesión abierta':''}</small></div></div>`;
+      box.innerHTML=`<div class="chk"><i class="${bien?'ok':'warn'}"></i><div><b>Conectado en vivo</b><small>${rows.length.toLocaleString('es-MX')} líneas de venta (toda la historia${Object.keys(j.dias||{}).length?', desde '+esc(scDiaN(Object.keys(j.dias).sort()[0])):''})${e&&e.leido_en?` · la tienda subió datos ${hace(e.leido_en)}`:''}${e&&e.ok===false?` · <span style="color:var(--bad)">el lector de la tienda reporta error: ${esc(e.error||'')}</span>`:''}${!bien&&age!=null&&e.ok!==false?' · si no avanza, revisa que la computadora de Denmor esté prendida con sesión abierta':''}</small></div></div>`;
       renderSicar(); return; }
     if(r.j&&r.j.error==='sin_config'){ vivoMsg='Pega arriba el servidor y la contraseña que te dio MAKMEX y toca Conectar.'; scShowCred(false); }
     else if(r.j&&r.j.error==='contrasena'){ vivoMsg='La contraseña o el servidor no son correctos. Toca "Cambiar datos" y revísalos con Emiliano.'; }
@@ -823,6 +823,13 @@ $('scFile').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) read
 ['dragleave','drop'].forEach(ev=>$('scDrop').addEventListener(ev,e=>{ e.preventDefault(); $('scDrop').classList.remove('on'); if(ev==='drop'&&e.dataTransfer.files[0]) readSicarFile(e.dataTransfer.files[0]); }));
 try{ const f=JSON.parse(LS.get('dn_sc_file')||'null'); if(f&&f.rows) { SC.file=f; } }catch(e){}
 /* ---- tablero ---- */
+/* margen sobre la venta por año (ganancia = vendido × margen). Se puede cambiar en la tabla "Lo que ganas". */
+const SC_MARG_DEF={2025:17,2026:20};
+function scMargs(){ let o={}; try{ o=JSON.parse(LS.get('dn_sc_marg')||'{}')||{}; }catch(e){ o={}; } return Object.assign({},SC_MARG_DEF,o); }
+function scMarg(y){ const m=scMargs(); y=+y; if(m[y]!=null) return +m[y]; const ks=Object.keys(m).map(Number).sort((a,b)=>a-b); const prev=ks.filter(k=>k<y).pop(); return +(prev!=null?m[prev]:m[ks[0]])||0; }
+const scHoy=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chihuahua'}).format(new Date());
+const scMesN=ym=>{ const s=new Date(ym+'-15T12:00:00').toLocaleDateString('es-MX',{month:'short',year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); };
+const scDiaN=d=>new Date(d+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'});
 function renderSicar(){ const box=$('scDash'); if(!box) return; const src=SC.auto||SC.file; if(!src){ box.innerHTML=''; return; }
   if(SC.file&&!$('scMap').innerHTML) $('scMap').innerHTML=`<p class="small" style="color:var(--ok)">✔ Usando <b>${esc(SC.file.nombre)}</b> (${SC.file.rows.length.toLocaleString('es-MX')} ventas). <button class="btn" id="scForget">Quitar reporte</button></p>`;
   /* solo ventas de Denmor: si el reporte trae varias sucursales, se toma la de Denmor (José Martí) */
@@ -832,37 +839,68 @@ function renderSicar(){ const box=$('scDash'); if(!box) return; const src=SC.aut
   if(sucs.length&&!denSet.size){ box.innerHTML=`<div class="card"><h3>¿Cuál sucursal es Denmor?</h3><p class="small muted" style="margin-top:0">El reporte trae varias sucursales y ninguna dice "Denmor". Elige cuál es la tuya; solo se contarán sus ventas.</p><div style="display:flex;gap:8px;flex-wrap:wrap">${sucs.map(x=>`<button class="btn" data-scden="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`;
     box.querySelectorAll('[data-scden]').forEach(b=>b.onclick=()=>{ LS.set('dn_sc_suc',b.dataset.scden); renderSicar(); }); return; }
   const esDen=r=>!sucs.length||denSet.has(r[5]);
-  const lim=SC.dias?new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chihuahua'}).format(new Date(Date.now()-(SC.dias-1)*864e5)):'';
   const otras=sucs.filter(x=>!denSet.has(x));
-  const R=src.rows.filter(r=>esDen(r)&&(!lim||r[0].slice(0,10)>=lim));
-  let tot=R.reduce((s,r)=>s+r[4],0), pz=R.reduce((s,r)=>s+r[3],0); let tickets=new Set(R.map(r=>r[1]||r[0])).size;
-  const byDay={}; R.forEach(r=>{ const d=r[0].slice(0,10); byDay[d]=(byDay[d]||0)+r[4]; });
-  /* en vivo: los totales salen de SICAR por día (ya con descuentos globales del ticket) */
-  if(src.dia){ const D=Object.entries(src.dia).filter(([d])=>!lim||d>=lim); if(D.length){ tot=0; pz=0; tickets=0; Object.keys(byDay).forEach(d=>delete byDay[d]); D.forEach(([d,o])=>{ tot+=o.total; pz+=o.piezas; tickets+=o.ventas; byDay[d]=o.total; }); } }
-  const byPago={}; (src.pagos||[]).forEach(([d,t,v])=>{ if(!lim||d>=lim) byPago[t]=(byPago[t]||0)+v; });
+  const ALL=src.rows.filter(esDen);
+  /* totales por día de TODA la historia (en vivo salen de SICAR ya con descuentos globales del ticket) */
+  const DIA={};
+  if(src.dia&&Object.keys(src.dia).length){ Object.entries(src.dia).forEach(([d,o])=>DIA[d]={t:+o.total||0,v:+o.ventas||0,p:+o.piezas||0}); }
+  else { const tk={}; ALL.forEach(r=>{ const d=r[0].slice(0,10); const o=DIA[d]=DIA[d]||{t:0,v:0,p:0}; o.t+=r[4]; o.p+=r[3]; (tk[d]=tk[d]||new Set()).add(r[1]||r[0]); }); Object.keys(tk).forEach(d=>DIA[d].v=tk[d].size); }
+  const diasAll=Object.keys(DIA).sort(); const years=[...new Set(diasAll.map(d=>d.slice(0,4)))].sort();
+  /* periodo elegido */
+  let per=String(SC.per!=null?SC.per:SC.dias); const hoy=scHoy();
+  if(/^y\d{4}$/.test(per)&&!years.includes(per.slice(1))) per='0';
+  let lim='',hasta='';
+  if(/^y\d{4}$/.test(per)){ lim=per.slice(1)+'-01-01'; hasta=per.slice(1)+'-12-31'; }
+  else if(per==='m'){ lim=hoy.slice(0,8)+'01'; }
+  else if(+per>0){ lim=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chihuahua'}).format(new Date(Date.now()-(+per-1)*864e5)); }
+  const enP=d=>(!lim||d>=lim)&&(!hasta||d<=hasta);
+  const R=ALL.filter(r=>enP(r[0].slice(0,10)));
+  let tot=0,pz=0,tickets=0,gan=0; const byDay={};
+  diasAll.filter(enP).forEach(d=>{ const o=DIA[d]; tot+=o.t; pz+=o.p; tickets+=o.v; byDay[d]=o.t; gan+=o.t*scMarg(d.slice(0,4))/100; });
+  const byPago={}; (src.pagos||[]).forEach(([d,t,v])=>{ if(enP(d)) byPago[t]=(byPago[t]||0)+v; });
   const byKey={}; R.forEach(r=>{ const k=r[2].replace(/-(AA|A|B|C|D|E|F)$/,''); const o=byKey[k]=byKey[k]||{pz:0,imp:0,desc:r[6]||''}; o.pz+=r[3]; o.imp+=r[4]; });
   const byGrade={}; R.forEach(r=>{ const g=(r[2].match(/-(AA|A|B|C|D|E|F)$/)||[])[1]||'Sin calif.'; byGrade[g]=(byGrade[g]||0)+r[4]; });
-  
   /* pedidos de la página que terminaron en venta: misma clave vendida entre el día del pedido y 10 días después */
-  const sales=src.rows.filter(esDen); const web=PEDS.filter(p=>p.enviado&&(!lim||String(p.creado).slice(0,10)>=lim)); let conv=0, convImp=0; const convList=[];
+  const web=PEDS.filter(p=>p.enviado&&enP(String(p.creado).slice(0,10))); let conv=0, convImp=0; const convList=[];
   for(const p of web){ const d0=String(p.creado).slice(0,10), d1=new Date(Date.parse(p.creado)+10*864e5).toISOString().slice(0,10); const skus=new Set((p.datos&&p.datos.items||[]).map(i=>i.sku));
-    const hit=sales.filter(r=>skus.has(r[2])&&r[0].slice(0,10)>=d0&&r[0].slice(0,10)<=d1); if(hit.length){ conv++; const imp=hit.reduce((s,r)=>s+r[4],0); convImp+=imp; convList.push([p,imp]); } }
-  const k=(v,t)=>`<div class="kpi"><b>${v}</b><span>${t}</span></div>`;
-  const days=Object.keys(byDay).sort(); const mx=Math.max(1,...Object.values(byDay));
-  const top=Object.entries(byKey).sort((a,b)=>b[1].imp-a[1].imp).slice(0,20);
-  const nm=k=>{ const m=M.get(k); return m?m.name:(byKey[k]&&byKey[k].desc)||''; };
-  box.innerHTML=`<div class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><h3 style="margin:0;flex:1">Ventas de Denmor <span class="muted small">(${src.vivo?'en vivo desde SICAR':src.fuente==='auto'?'automático':'reporte: '+esc(src.nombre)}${denSet.size?' · sucursal '+esc([...denSet].join(', ')):''})</span>${otras.length?`<br><span class="small muted" style="font-weight:400">No se cuentan: ${esc(otras.join(', '))}. <button class="btn" style="padding:2px 8px" id="scSucCh">Cambiar</button></span>`:''}</h3>
-      <div><label class="f" style="margin-top:0">Periodo</label><select id="scDias">${[[1,'Hoy'],[7,'7 días'],[30,'30 días'],[90,'90 días'],[0,'Todo el reporte']].map(([v,t])=>`<option value="${v}" ${SC.dias===v?'selected':''}>${t}</option>`).join('')}</select></div></div>
-    <div class="kpis" style="margin-top:12px">${k(fmt(tot),'vendido')+k(tickets.toLocaleString('es-MX'),'ventas (tickets)')+k(pz.toLocaleString('es-MX'),'piezas')+k(fmt(tickets?tot/tickets:0),'ticket promedio')+k(conv+' de '+web.length,'pedidos de la página que se vendieron')+k(fmt(convImp),'vendido por la página')}</div>
-    <h3>Ventas por día</h3><div class="vbars">${days.map(d=>`<div style="height:${byDay[d]/mx*100}%" data-t="${new Date(d+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'short'})}: ${fmt(byDay[d])}"></div>`).join('')}</div><div class="vaxis"><span>${days[0]||''}</span><span>${days[days.length-1]||''}</span></div></div>
+    const hit=ALL.filter(r=>skus.has(r[2])&&r[0].slice(0,10)>=d0&&r[0].slice(0,10)<=d1); if(hit.length){ conv++; const imp=hit.reduce((s,r)=>s+r[4],0); convImp+=imp; convList.push([p,imp]); } }
+  /* récord total: toda la historia desde la primera venta */
+  const T={t:0,v:0,p:0,g:0}; const byMes={}, byYear={};
+  diasAll.forEach(d=>{ const o=DIA[d], m=scMarg(d.slice(0,4))/100, ym=d.slice(0,7), y=d.slice(0,4);
+    T.t+=o.t; T.v+=o.v; T.p+=o.p; T.g+=o.t*m;
+    const M2=byMes[ym]=byMes[ym]||{t:0,v:0,g:0,d:0}; M2.t+=o.t; M2.v+=o.v; M2.g+=o.t*m; M2.d++;
+    const Y=byYear[y]=byYear[y]||{t:0,v:0,p:0,g:0,d:0}; Y.t+=o.t; Y.v+=o.v; Y.p+=o.p; Y.g+=o.t*m; Y.d++; });
+  const mejorDia=diasAll.reduce((a,d)=>!a||DIA[d].t>DIA[a].t?d:a,'');
+  const meses=Object.keys(byMes).sort(); const mejorMes=meses.reduce((a,m)=>!a||byMes[m].t>byMes[a].t?m:a,'');
+  const mesesCompletos=meses.filter(m=>m!==hoy.slice(0,7)); const promMes=mesesCompletos.length?mesesCompletos.reduce((s,m)=>s+byMes[m].t,0)/mesesCompletos.length:0;
+  const primera=diasAll[0]||'';
+  const k=(v,t,c)=>`<div class="kpi${c?' '+c:''}"><b>${v}</b><span>${t}</span></div>`;
+  /* gráfica: por día si el periodo es corto, por mes si es largo */
+  let days=Object.keys(byDay).sort(); let porMes=days.length>100; let G=byDay;
+  if(porMes){ G={}; days.forEach(d=>{ const m=d.slice(0,7); G[m]=(G[m]||0)+byDay[d]; }); days=Object.keys(G).sort(); }
+  const mx=Math.max(1,...Object.values(G));
+  const top=Object.entries(byKey).sort((a,b)=>b[1].imp-a[1].imp).slice(0,25);
+  const nm=k2=>{ const m=M.get(k2); return m?m.name:(byKey[k2]&&byKey[k2].desc)||''; };
+  const perOpts=[['1','Hoy'],['7','7 días'],['30','30 días'],['m','Este mes'],['90','90 días'],...years.slice().reverse().map(y=>['y'+y,'Año '+y]),['0','Todo (desde la primera venta)']];
+  const pct=(a,b)=>b?Math.round(a/b*100):0;
+  box.innerHTML=`<div class="card"><h3 style="margin-top:0">Récord total de Denmor <span class="muted small">desde la primera venta${primera?' · '+esc(scDiaN(primera)):''}</span></h3>
+    <div class="kpis sc" style="margin-top:12px">${k(fmt(T.t),'vendido en total')+k(fmt(T.g),'ganancia total estimada','g')+k(T.v.toLocaleString('es-MX'),'ventas (tickets)')+k(Math.round(T.p).toLocaleString('es-MX'),'piezas')+k(fmt(T.v?T.t/T.v:0),'ticket promedio')+k(diasAll.length.toLocaleString('es-MX'),'días con venta')+k(fmt(promMes),'promedio por mes')+k(mejorDia?fmt(DIA[mejorDia].t):'—','mejor día'+(mejorDia?' · '+esc(scDiaN(mejorDia)):''))+k(mejorMes?fmt(byMes[mejorMes].t):'—','mejor mes'+(mejorMes?' · '+esc(scMesN(mejorMes)):''))}</div></div>
+  <div class="card" style="margin-top:12px"><h3 style="margin-top:0">Lo que ganas en todo lo vendido</h3><p class="small muted" style="margin-top:0">Ganancia = vendido × margen sobre la venta de cada año. Cambia el margen si lo necesitas; se guarda en este navegador.</p>
+    <div class="tw"><table><tr><th>Año</th><th class="num">Vendido</th><th class="num">Tickets</th><th class="num">Margen</th><th class="num">Ganancia</th></tr>${years.map(y=>`<tr><td><b>${y}</b>${byYear[y].d?` <span class="muted small">(${byYear[y].d} días con venta)</span>`:''}</td><td class="num">${fmt(byYear[y].t)}</td><td class="num">${byYear[y].v.toLocaleString('es-MX')}</td><td class="num"><input type="number" min="0" max="100" step="0.5" value="${scMarg(y)}" data-scmarg="${y}" style="width:70px;text-align:right;padding:4px 6px"> %</td><td class="num"><b>${fmt(byYear[y].g)}</b></td></tr>`).join('')}<tr><td><b>Total</b></td><td class="num"><b>${fmt(T.t)}</b></td><td class="num"><b>${T.v.toLocaleString('es-MX')}</b></td><td class="num">${T.t?(T.g/T.t*100).toFixed(1):'0'} % prom.</td><td class="num"><b style="color:#1C8A4C">${fmt(T.g)}</b></td></tr></table></div></div>
+  <div class="card" style="margin-top:12px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end"><h3 style="margin:0;flex:1">Ventas de Denmor <span class="muted small">(${src.vivo?'en vivo desde SICAR':src.fuente==='auto'?'automático':'reporte: '+esc(src.nombre)}${denSet.size?' · sucursal '+esc([...denSet].join(', ')):''})</span>${otras.length?`<br><span class="small muted" style="font-weight:400">No se cuentan: ${esc(otras.join(', '))}. <button class="btn" style="padding:2px 8px" id="scSucCh">Cambiar</button></span>`:''}</h3>
+      <div><label class="f" style="margin-top:0">Periodo</label><select id="scDias">${perOpts.map(([v,t])=>`<option value="${v}" ${per===v?'selected':''}>${t}</option>`).join('')}</select></div></div>
+    <div class="kpis sc" style="margin-top:12px">${k(fmt(tot),'vendido')+k(fmt(gan),'ganancia estimada ('+(tot?(gan/tot*100).toFixed(1):0)+'%)','g')+k(tickets.toLocaleString('es-MX'),'ventas (tickets)')+k(Math.round(pz).toLocaleString('es-MX'),'piezas')+k(fmt(tickets?tot/tickets:0),'ticket promedio')+k(fmt(Object.keys(byDay).length?tot/Object.keys(byDay).length:0),'promedio por día con venta')+k(pct(tot,T.t)+'%','del récord total')+k(conv+' de '+web.length,'pedidos de la página que se vendieron')+k(fmt(convImp),'vendido por la página')}</div>
+    <h3>${porMes?'Ventas por mes':'Ventas por día'}</h3><div class="vbars">${days.map(d=>`<div style="height:${G[d]/mx*100}%" data-t="${porMes?esc(scMesN(d)):new Date(d+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'short'})}: ${fmt(G[d])}"></div>`).join('')}</div><div class="vaxis"><span>${days[0]?(porMes?scMesN(days[0]):days[0]):''}</span><span>${days.length?(porMes?scMesN(days[days.length-1]):days[days.length-1]):''}</span></div></div>
   <div class="grid" style="margin-top:12px">
     <div class="card" style="grid-column:span 2"><h3>Lo que más se vende</h3><div class="tw" style="max-height:420px;overflow:auto"><table><tr><th>Modelo</th><th>Producto</th><th class="num">Piezas</th><th class="num">Vendido</th></tr>${top.map(([k2,o])=>`<tr><td><b>${esc(k2)}</b></td><td>${esc(nm(k2))}</td><td class="num">${o.pz}</td><td class="num">${fmt(o.imp)}</td></tr>`).join('')}</table></div></div>
     <div class="card"><h3>Por calificación</h3><div class="bars" id="scGrB"></div>${Object.keys(byPago).length?'<h3 style="margin-top:16px">Forma de pago</h3><div class="bars" id="scPgB"></div>':''}</div>
   </div>
+  <div class="card" style="margin-top:12px"><h3 style="margin-top:0">Mes por mes <span class="muted small">(toda la historia)</span></h3><div class="tw" style="max-height:420px;overflow:auto"><table><tr><th>Mes</th><th class="num">Vendido</th><th class="num">Tickets</th><th class="num">Ticket prom.</th><th class="num">Ganancia</th><th class="num">vs. mes anterior</th></tr>${meses.slice().reverse().map((m,i,arr)=>{ const o=byMes[m], prev=byMes[arr[i+1]]; const dv=prev&&prev.t?Math.round((o.t/prev.t-1)*100):null; return `<tr><td><b>${esc(scMesN(m))}</b>${m===hoy.slice(0,7)?' <span class="muted small">(en curso)</span>':''}</td><td class="num">${fmt(o.t)}</td><td class="num">${o.v.toLocaleString('es-MX')}</td><td class="num">${fmt(o.v?o.t/o.v:0)}</td><td class="num">${fmt(o.g)}</td><td class="num" style="color:${dv==null?'inherit':dv>=0?'#1C8A4C':'var(--bad)'}">${dv==null?'—':(dv>=0?'+':'')+dv+'%'}</td></tr>`; }).join('')}</table></div></div>
   <div class="card" style="margin-top:12px"><h3>Pedidos de la página que terminaron en venta</h3><p class="small muted" style="margin-top:0">Se cuenta como venta cuando la misma clave se vendió en SICAR entre el día del pedido y 10 días después.</p>${convList.length?`<table><tr><th>Folio</th><th>Cliente</th><th>Fecha</th><th class="num">Vendido en SICAR</th></tr>${convList.map(([p,imp])=>`<tr><td><b>${esc(p.folio)}</b></td><td>${esc(p.datos&&p.datos.cliente&&p.datos.cliente.nombre||'')}</td><td>${esc(fdate(p.creado))}</td><td class="num">${fmt(imp)}</td></tr>`).join('')}</table>`:'<p class="muted small">Todavía ninguno en este periodo.</p>'}</div>`;
   bars($('scGrB'),Object.fromEntries(Object.entries(byGrade).map(([a,b])=>[a,Math.round(b)])),null); $('scGrB').querySelectorAll('.num').forEach(n=>n.textContent=fmt(+n.textContent)); if($('scPgB')){ bars($('scPgB'),Object.fromEntries(Object.entries(byPago).map(([a,b])=>[a,Math.round(b)])),null); $('scPgB').querySelectorAll('.num').forEach(n=>n.textContent=fmt(+n.textContent)); }
   if($('scSucCh')) $('scSucCh').onclick=()=>{ LS.del('dn_sc_suc'); const keep=sucs; denSet.clear(); box.innerHTML=`<div class="card"><h3>¿Cuál sucursal es Denmor?</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${keep.map(x=>`<button class="btn" data-scden="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`; box.querySelectorAll('[data-scden]').forEach(b=>b.onclick=()=>{ LS.set('dn_sc_suc',b.dataset.scden); renderSicar(); }); };
-  $('scDias').onchange=e=>{ SC.dias=+e.target.value; renderSicar(); }; }
+  box.querySelectorAll('[data-scmarg]').forEach(inp=>inp.onchange=()=>{ const v=parseFloat(inp.value); if(isNaN(v)||v<0||v>100){ toast('Pon un margen entre 0 y 100'); return; } const o=scMargs(); o[inp.dataset.scmarg]=v; LS.set('dn_sc_marg',JSON.stringify(o)); renderSicar(); });
+  $('scDias').onchange=e=>{ SC.per=e.target.value; renderSicar(); }; }
 gate();
 })();
 </script>
