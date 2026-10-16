@@ -28,7 +28,7 @@ export async function escribiendo(messageId) {
 }
 
 export async function enviarTexto(to, texto) {
-  return post({ recipient_type: 'individual', to, type: 'text', text: { preview_url: false, body: String(texto).slice(0, 4000) } });
+  return post({ recipient_type: 'individual', to, type: 'text', text: { preview_url: /https?:\/\//.test(String(texto)), body: String(texto).slice(0, 4000) } });
 }
 
 export const configurado = () => (prov() === '360dialog' ? !!process.env.WA_360_KEY : !!(process.env.WA_TOKEN && process.env.WA_PHONE_ID));

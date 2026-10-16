@@ -1,5 +1,5 @@
 // "Cerebro" del asistente: arma la respuesta con Claude (API de Anthropic) usando el catálogo real de Denmor.
-import { cargarCatalogo, buscar, porClave } from './catalogo.mjs';
+import { cargarCatalogo, buscar, porClave, ficha } from './catalogo.mjs';
 
 const MODELO = () => process.env.WA_MODELO || 'claude-haiku-5-5';
 
@@ -36,6 +36,8 @@ ${promo ? `- Promoción activa: ${promo.nombre || 'descuento'} de ${Math.round(p
 
 REGLAS IMPORTANTES
 - Precios y existencias: SOLO los que te da la herramienta buscar_productos. Nunca inventes precio, existencia, modelo ni característica. Si no aparece, dilo y ofrece conseguirlo sobre pedido o comunicarlo con alguien del equipo.
+- Características, especificaciones, qué incluye, para qué sirve, voltaje, torque, etc.: SOLO lo que diga ficha_producto. Si la ficha no lo trae, dilo con honestidad y ofrece checarlo con alguien del equipo. No completes con lo que "sabes" de la marca.
+- Cuando recomiendes un modelo en concreto, manda su link (el campo "link") solo, en su propio párrafo: al cliente le aparece la foto y puede ver todo en la página. Un link por mensaje, máximo dos por respuesta.
 - Cuando el cliente pregunte por una herramienta, búscala antes de contestar. Ofrece primero lo que hay en Denmor, luego Bodega 1, luego CDMX. Menciona la condición (nuevo, como nuevo, etc.) junto con el precio.
 - No ofrezcas descuentos extra, precios de distribuidor ni negocies. Si piden rebaja, precio de mayoreo o distribuidor, pásalo con alguien del equipo (pasar_a_persona).
 - Pedidos: cuando el cliente quiera comprar o apartar, junta: qué clave(s) y cuántas, su nombre, y si pasa a la tienda o quiere envío (con dirección y código postal). Luego usa registrar_pedido y dile que en un momento alguien del equipo le confirma existencia, total y forma de pago. No pidas datos de tarjeta ni cuentas bancarias nunca.
@@ -46,6 +48,7 @@ REGLAS IMPORTANTES
 
 const HERRAMIENTAS = [
   { name: 'buscar_productos', description: 'Busca en el catálogo de Denmor por modelo, clave o descripción (ej. "2904-20", "rotomartillo milwaukee", "esmeriladora dewalt 20v"). Devuelve opciones con condición, precio actual y existencia por tienda.', input_schema: { type: 'object', properties: { consulta: { type: 'string' } }, required: ['consulta'] } },
+  { name: 'ficha_producto', description: 'Ficha de un producto del catálogo: descripción, especificaciones, qué incluye, condición, precio, existencia y link con foto. Úsala cuando pregunten detalles de un modelo. Acepta la clave (ej. 2904-20-B) o el modelo (ej. 2904-20).', input_schema: { type: 'object', properties: { clave: { type: 'string' } }, required: ['clave'] } },
   { name: 'registrar_pedido', description: 'Registra un pedido en el panel de la tienda para que el equipo lo confirme. Úsalo solo cuando el cliente ya dijo qué quiere y cómo lo recibe.', input_schema: { type: 'object', properties: {
     nombre_cliente: { type: 'string' },
     articulos: { type: 'array', items: { type: 'object', properties: { clave: { type: 'string', description: 'Clave exacta, ej. 2904-20-B o 2869-20-AA-KIT5A' }, cantidad: { type: 'integer' } }, required: ['clave', 'cantidad'] } },
@@ -101,6 +104,9 @@ export async function responder(historial, acciones, opciones = {}) {
         if (u.name === 'buscar_productos') {
           const r = buscar(cat, String(u.input.consulta || ''));
           out = r.modelos.length ? JSON.stringify(r) : 'Sin resultados en el catálogo para esa búsqueda.';
+        } else if (u.name === 'ficha_producto') {
+          const f = await ficha(cat, String(u.input.clave || ''));
+          out = f ? JSON.stringify(f) : 'Esa clave no está en el catálogo. Búscala primero con buscar_productos.';
         } else if (u.name === 'registrar_pedido') {
           const items = (u.input.articulos || []).map((a) => { const p = porClave(cat, a.clave); return p ? { sku: p.sku, nombre: p.nombre, cond: p.cal || 'CB', cant: Math.max(1, Math.min(99, +a.cantidad || 1)), precio: p.precio } : null; });
           if (items.some((x) => !x)) out = 'Alguna clave no existe en el catálogo. Busca de nuevo la clave exacta antes de registrar.';

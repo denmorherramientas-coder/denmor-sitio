@@ -8,7 +8,13 @@ const URL_CORE = process.env.WA_URL_CORE || 'https://makmex.com/core.json';
 const URL_AJUSTES = process.env.WA_URL_AJUSTES || 'https://raw.githubusercontent.com/denmorherramientas-coder/denmor-ajustes/main/ajustes.json';
 const URL_EXIST = process.env.WA_URL_EXISTENCIAS || 'https://raw.githubusercontent.com/makmexchihuahua-hub/makmex-existencias/main/existencias.json';
 const URL_EXIST_2 = 'https://makmex.com/existencias.json';
+const URL_DETALLE = process.env.WA_URL_DETALLE || 'https://makmex.com/detail-{b}.json';
+const SITE = 'https://denmorherramientas.com';
 const CACHE_MS = 10 * 60 * 1000;
+const enc = (s) => (/^[A-Za-z0-9._~-]+$/.test(s) ? s : String(s).replace(/[^A-Za-z0-9._~-]/g, '-'));
+/** Link del producto en la página: WhatsApp le pone la foto y el nombre (función producto-og). */
+export const linkProducto = (modelo) => `${SITE}/p/${enc(modelo)}/`;
+export const GRADE_NOTE = { AA: 'Totalmente nuevo, en su caja sellada.', A: '100 % nuevo, sin caja; sin raspones ni señales de uso.', B: 'Sin uso. Puede traer 1 a 3 detalles mínimos del traslado. Sin manchas.', C: 'Sí se usó: ligeramente manchado o raspado. Probado, funciona perfectamente.', D: 'Usado, con detalles estéticos marcados. Probado, funciona perfectamente.', E: 'Muy usado, varios detalles estéticos fuertes. Probado y funcionando.', F: 'Muy usado, remate. Se probó y funciona.' };
 
 export const GRADE_TXT = { AA: 'Nuevo en caja', A: 'Nuevo sin caja', B: 'Como nuevo, sin caja', C: 'Semi nuevo, con uso', D: 'Usado', E: 'Muy usado', F: 'Muy usado (remate)' };
 const VENDIBLES = new Set(['AA', 'A', 'B', 'C']);
@@ -85,9 +91,10 @@ export function armarCatalogo(core, AJ, ex) {
     sku: p.sku, modelo: p.model, cal: p.grade || '', kit: !!p.kit, nombre: p.name, marca: p.brand, cat: p.cat || '', fam: p.fam || '',
     precio: p.disc > 0 && p.disc < p.p1 ? p.disc : p.p1, precioLista: p.p1, ah: p.ah || '',
     denmor: p.st[1] || 0, bodega1: p.st[0] || 0, cdmx: p.st[2] || 0,
-    _txt: norm([p.name, p.model, p.sku, p.brand, p.cat, p.fam].join(' ')),
+    b: p.b, _txt: norm([p.name, p.model, p.sku, p.brand, p.cat, p.fam].join(' ')),
   }));
-  return { productos, promo };
+  const fichas = AJ.fichas && typeof AJ.fichas === 'object' ? AJ.fichas : {};
+  return { productos, promo, fichas };
 }
 
 export async function cargarCatalogo() {
@@ -131,11 +138,12 @@ export function buscar(cat, consulta, max = 6) {
   const GO = { AA: 0, A: 1, B: 2, C: 3, D: 4, E: 5, F: 6 };
   return {
     modelos: orden.map(({ modelo, vars }) => ({
-      modelo, nombre: vars[0].nombre.replace(/\s*\(kit\)\s*$/i, ''), marca: vars[0].marca,
-      opciones: vars.sort((a, b) => (a.kit - b.kit) || (GO[a.cal] ?? 9) - (GO[b.cal] ?? 9)).map((v) => ({
+      modelo, link: linkProducto(modelo), nombre: vars[0].nombre.replace(/\s*\(kit\)\s*$/i, ''), marca: vars[0].marca,
+      opciones: vars.sort((a, b) => ((b.denmor + b.bodega1 + b.cdmx > 0) - (a.denmor + a.bodega1 + a.cdmx > 0)) || (b.denmor > 0) - (a.denmor > 0) || (a.kit - b.kit) || (GO[a.cal] ?? 9) - (GO[b.cal] ?? 9)).map((v) => ({
         clave: v.sku, presentacion: v.kit ? `Kit con batería ${v.ah ? v.ah + '.0 Ah ' : ''}y cargador` : 'Solo herramienta',
         condicion: `${v.cal} · ${GRADE_TXT[v.cal] || ''}`, precio: v.precio, precio_antes: v.precio < v.precioLista ? v.precioLista : undefined,
         existencia: { denmor: v.denmor, bodega1_chihuahua: v.bodega1, cdmx: v.cdmx },
+        ...(v.denmor + v.bodega1 + v.cdmx > 0 ? {} : { sin_existencia: 'Sobre pedido, 7 a 10 días' }),
       })),
     })),
   };
@@ -144,4 +152,35 @@ export function buscar(cat, consulta, max = 6) {
 export function porClave(cat, clave) {
   const c = norm(clave);
   return cat.productos.find((p) => norm(p.sku) === c) || null;
+}
+
+// Descripciones de producto (las mismas que muestra la página al abrir un producto)
+const detCache = new Map(); // b → { t, j }
+async function detalle(b, sku) {
+  if (b == null || !(+b >= 0)) return null;
+  let c = detCache.get(b);
+  if (!c || Date.now() - c.t > 60 * 60 * 1000) { c = { t: Date.now(), j: await getJSON(URL_DETALLE.replace('{b}', b)).catch(() => ({})) }; detCache.set(b, c); }
+  return c.j[sku] || null;
+}
+const limpiarDesc = (t) => String(t || '').replace(/…\.+/g, '. ').replace(/\.{4,}/g, '. ')
+  .replace(/^(NUEVO EN CAJA SELLADA|NUEVO SIN CAJA|COMO NUEVO[^.]*|SEMI NUEVO[^.]*|USADO[^.]*|MUY USADO[^.]*)CALIFICACI[ÓO]N [A-F]+\.?\s*/i, '').replace(/\s+/g, ' ').trim();
+
+/** Ficha de un producto: descripción del catálogo, especificaciones cargadas en el panel, condición y link con foto. */
+export async function ficha(cat, clave) {
+  const c = norm(clave);
+  const p = cat.productos.find((x) => norm(x.sku) === c) || cat.productos.find((x) => norm(x.modelo) === c);
+  if (!p) return null;
+  // la descripción vive en la variante sin kit; si es kit, se toma la herramienta sola de la misma condición
+  const base = p.kit ? cat.productos.find((x) => !x.kit && x.modelo === p.modelo && x.cal === p.cal) || cat.productos.find((x) => !x.kit && x.modelo === p.modelo) || p : p;
+  const det = await detalle(base.b, base.sku).catch(() => null);
+  const txt = typeof det === 'string' ? det : det && (det.c || det.d || det.desc) || '';
+  const own = cat.fichas && cat.fichas[p.modelo];
+  const especificaciones = Array.isArray(own) ? own.filter((r) => Array.isArray(r) && r[0] && r[1]).map((r) => `${r[0]}: ${r[1]}`) : [];
+  return {
+    clave: p.sku, modelo: p.modelo, nombre: p.nombre, marca: p.marca, link: linkProducto(p.modelo),
+    condicion: `${p.cal} · ${GRADE_TXT[p.cal] || ''}. ${GRADE_NOTE[p.cal] || ''}`.trim(),
+    presentacion: p.kit ? `Kit con batería ${p.ah ? p.ah + '.0 Ah ' : ''}y cargador` : 'Solo herramienta (sin batería ni cargador)',
+    precio: p.precio, existencia: { denmor: p.denmor, bodega1_chihuahua: p.bodega1, cdmx: p.cdmx },
+    especificaciones, descripcion: limpiarDesc(txt).slice(0, 1500) || 'Sin descripción en el catálogo.',
+  };
 }
