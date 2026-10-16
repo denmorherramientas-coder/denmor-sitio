@@ -149,7 +149,12 @@ nav button.on{border-bottom-color:var(--red)}
   <div class="grid">
     <div class="card"><h3>1. En vivo (SICAR de Denmor vía MAKMEX)</h3>
       <div id="scAuto" class="small"><p class="muted">Revisando…</p></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="scRe">Actualizar ahora</button></div>
+      <div id="scCredBox" style="margin-top:8px">
+        <label class="f">Servidor (host) que te dio MAKMEX</label><input type="text" id="scHost" placeholder="aws-1-ca-central-1.pooler.supabase.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <label class="f">Contraseña de la ventana de datos</label><input type="password" id="scPass" placeholder="La que te pasó Emiliano" autocomplete="off">
+        <p class="small muted" style="margin:6px 0 0">O pega la cadena completa <b>postgresql://…</b> en el primer campo. Se guarda cifrada en este celular con la contraseña del panel.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn p" id="scConn">Conectar</button><button class="btn" id="scRe">Actualizar ahora</button><button class="btn" id="scCredEdit" hidden>Cambiar datos</button></div>
       <details style="margin-top:10px"><summary class="small muted">Otra fuente (archivo ventas.json del robot)</summary>
       <label class="f">Dirección del archivo de ventas</label><input type="text" id="scUrl" placeholder="https://raw.githubusercontent.com/…/ventas.json">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="scUrlSave">Guardar y revisar</button><button class="btn" id="scSpec">Ver instrucciones para el robot</button></div>
@@ -730,22 +735,34 @@ $('scSpecCopy').addEventListener('click',()=>{ (navigator.clipboard?navigator.cl
 $('scUrl').value=scUrl();
 $('scUrlSave').addEventListener('click',()=>{ const u=$('scUrl').value.trim(); if(u&&!/^https:\/\//.test(u)){ toast('La dirección debe empezar con https://'); return; } if(u&&u!==SC_DEF_URL) LS.set('dn_sc_url',u); else LS.del('dn_sc_url'); loadSicarAuto(); });
 const hace=t=>{ const a=Math.round((Date.now()-Date.parse(t))/60000); return isNaN(a)?'':a<1?'hace un momento':a<60?`hace ${a} min`:a<2880?`hace ${Math.round(a/60)} h`:`hace ${Math.round(a/1440)} días`; };
+/* datos de conexión de MAKMEX, cifrados con la llave del panel (igual que el token) */
+let SCC=null;
+async function scSave(o){ if(!KEY) return; const iv=crypto.getRandomValues(new Uint8Array(12)); const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},KEY,te.encode(JSON.stringify(o))); LS.set('dn_sc_cenc',JSON.stringify({iv:b64(iv),ct:b64(ct)})); }
+async function scLoad(){ if(SCC) return SCC; const e=LS.get('dn_sc_cenc'); if(!e||!KEY) return null; try{ const o=JSON.parse(e); SCC=JSON.parse(td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:ub64(o.iv)},KEY,ub64(o.ct)))); }catch(_){ SCC=null; } return SCC; }
+function scShowCred(hay){ $('scCredBox').hidden=hay; $('scConn').hidden=hay; $('scCredEdit').hidden=!hay; }
+$('scCredEdit').addEventListener('click',()=>{ scShowCred(false); if(SCC){ $('scHost').value=SCC.url||SCC.host||''; } $('scPass').value=''; });
+$('scConn').addEventListener('click',async()=>{ const h=$('scHost').value.trim(), pw=$('scPass').value;
+  let o=null; if(/^postgres(ql)?:\/\//i.test(h)) o={url:h.replace('[YOUR-PASSWORD]',pw).replace('<CONTRASEÑA>',pw)}; else if(h&&pw) o={host:h.replace(/^https?:\/\//,'').replace(/[\/:].*$/,''),password:pw};
+  if(!o){ toast('Pon el servidor (host) y la contraseña'); return; } if(o.url&&/<|\[YOUR/.test(o.url)){ toast('Falta la contraseña en la cadena'); return; }
+  SCC=o; await scSave(o); $('scPass').value=''; loadSicarAuto(); });
 $('scRe').addEventListener('click',()=>loadSicarAuto());
 async function loadSicarAuto(){ const box=$('scAuto'); box.innerHTML='<p class="muted">Revisando…</p>';
   /* 1) en vivo: función /api/sicar que lee la ventana de MAKMEX (Supabase) */
-  const tok=ghCfg().t; let vivoMsg='';
-  if(tok){ const r=await probe('/api/sicar?dias=90',{headers:{Authorization:'Bearer '+tok}});
+  const tok=ghCfg().t; let vivoMsg=''; const cred=await scLoad(); scShowCred(!!cred);
+  if(cred||tok){ const r=cred?await probe('/api/sicar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.assign({dias:90},cred))}):await probe('/api/sicar?dias=90',{headers:{Authorization:'Bearer '+tok}});
     if(r.ok&&r.j&&r.j.ok){ const j=r.j; const rows=(j.ventas||[]).map(v=>[String(v[0]),String(v[1]),String(v[2]),+v[3]||0,+v[4]||0,'Denmor',String(v[6]||'')]).filter(v=>v[0]&&v[2]);
       SC.auto={rows,dia:j.dias||null,pagos:j.pagos||[],fuente:'auto',vivo:true,estado:j.estado};
       const e=j.estado; const age=e&&e.leido_en?(Date.now()-Date.parse(e.leido_en))/60000:null; const bien=e&&e.ok!==false&&age!=null&&age<15;
       box.innerHTML=`<div class="chk"><i class="${bien?'ok':'warn'}"></i><div><b>Conectado en vivo</b><small>${rows.length.toLocaleString('es-MX')} líneas de venta (90 días)${e&&e.leido_en?` · la tienda subió datos ${hace(e.leido_en)}`:''}${e&&e.ok===false?` · <span style="color:var(--bad)">el lector de la tienda reporta error: ${esc(e.error||'')}</span>`:''}${!bien&&age!=null&&e.ok!==false?' · si no avanza, revisa que la computadora de Denmor esté prendida con sesión abierta':''}</small></div></div>`;
       renderSicar(); return; }
-    if(r.j&&r.j.error==='sin_config') vivoMsg='Falta poner los datos de conexión en Netlify (SICAR_PG_HOST y SICAR_PG_PASSWORD).';
+    if(r.j&&r.j.error==='sin_config'){ vivoMsg='Pega arriba el servidor y la contraseña que te dio MAKMEX y toca Conectar.'; scShowCred(false); }
+    else if(r.j&&r.j.error==='contrasena'){ vivoMsg='La contraseña o el servidor no son correctos. Toca "Cambiar datos" y revísalos con Emiliano.'; }
+    else if(r.j&&r.j.error==='datos_invalidos'){ vivoMsg='El servidor debe ser el de Supabase que te dio MAKMEX (termina en pooler.supabase.com).'; scShowCred(false); }
     else if(r.j&&r.j.error==='acceso_retirado') vivoMsg='MAKMEX suspendió o retiró el acceso a la ventana de datos.';
     else if(r.s===401) vivoMsg='El token de Conexión no tiene permiso.';
     else if(r.s===404||r.s===0) vivoMsg='La conexión en vivo se activa cuando se publique esta versión del sitio.';
     else vivoMsg='No se pudo leer la ventana de MAKMEX'+(r.j&&r.j.msg?': '+r.j.msg:'')+'.';
-  } else vivoMsg='Conecta el panel en la pestaña Conexión para ver las ventas en vivo.';
+  } else vivoMsg='Pega arriba el servidor y la contraseña que te dio MAKMEX y toca Conectar.';
   /* 2) respaldo: archivo ventas.json del robot */
   try{ const r=await fetch(scUrl()+(scUrl().includes('?')?'&':'?')+'t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(r.status);
     const j=await r.json(); const ci={}; (j.cols||['fecha','ticket','clave','cantidad','importe','sucursal']).forEach((c,i)=>ci[c]=i);

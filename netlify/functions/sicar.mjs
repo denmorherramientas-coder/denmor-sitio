@@ -2,6 +2,7 @@
 // (esquema `denmor` en su Postgres de Supabase, actualizado cada 2 minutos desde la tienda).
 //
 // Solo panel (Authorization: Bearer <token de GitHub del panel>, igual que Pedidos y Visitas):
+//   POST /api/sicar { url | host+password, dias }  (lo que manda el panel)
 //   GET /api/sicar?dias=90  → { ok, estado, ventas:[[fecha,ticket,clave,cantidad,importe,sucursal,desc]], dias:{…}, pagos:[…] }
 //
 // Configuración en Netlify (Site configuration → Environment variables). La contraseña NUNCA va en el código:
@@ -81,22 +82,49 @@ async function leer(cfg, dias) {
   }
 }
 
+/* Datos que el panel guarda (cifrados con la contraseña del panel) y manda en el cuerpo del POST.
+   La contraseña de MAKMEX es la llave: si no es correcta, Postgres rechaza la conexión.
+   Solo se aceptan servidores de Supabase y el usuario lector de Denmor. */
+function desdePanel(b) {
+  if (!b || typeof b !== 'object') return null;
+  let host = String(b.host || '').trim(), user = String(b.user || DEF_USER).trim(), password = String(b.password || ''), port = 5432;
+  const url = String(b.url || '').trim();
+  if (url) {
+    try {
+      const u = new URL(url.replace(/^postgres(ql)?:/, 'http:'));
+      host = u.hostname; port = +u.port || 5432; user = decodeURIComponent(u.username) || user; password = decodeURIComponent(u.password) || password;
+    } catch (e) { return null; }
+  }
+  if (!/^[a-z0-9.-]+\.(pooler\.supabase\.com|supabase\.co)$/i.test(host)) return null;
+  if (!/^denmor_lector(\.[a-z0-9]+)?$/i.test(user) || !password || password.length > 200) return null;
+  if (![5432, 6543].includes(port)) port = 5432;
+  return { host, port, database: 'postgres', user, password, ssl: { rejectUnauthorized: false } };
+}
+
 export default async (req) => {
-  if (req.method !== 'GET') return json({ error: 'método' }, 405);
-  if (!(await autorizado(req))) return json({ error: 'sin permiso' }, 401);
-  const cfg = conexion();
-  if (!cfg) return json({ error: 'sin_config', msg: 'Faltan SICAR_PG_HOST y SICAR_PG_PASSWORD en Netlify' }, 503);
-  const dias = Math.min(400, Math.max(1, parseInt(new URL(req.url).searchParams.get('dias') || '90', 10) || 90));
-  const hit = cache.get(dias);
+  if (req.method !== 'GET' && req.method !== 'POST') return json({ error: 'método' }, 405);
+  let body = null;
+  if (req.method === 'POST') { try { body = await req.json(); } catch (e) { return json({ error: 'datos' }, 400); } }
+  let cfg = body && (body.url || body.password) ? desdePanel(body) : null;
+  if (body && (body.url || body.password) && !cfg) return json({ error: 'datos_invalidos', msg: 'Revisa el servidor (host) y la contraseña' }, 400);
+  if (!cfg) {
+    if (!(await autorizado(req))) return json({ error: 'sin_config', msg: 'Pega en el panel los datos de conexión de MAKMEX' }, 401);
+    cfg = conexion();
+    if (!cfg) return json({ error: 'sin_config', msg: 'Pega en el panel los datos de conexión de MAKMEX' }, 503);
+  }
+  const dias = Math.min(400, Math.max(1, parseInt((body && body.dias) || new URL(req.url).searchParams.get('dias') || '90', 10) || 90));
+  const ck = (await sha(cfg.host + '|' + cfg.user + '|' + (cfg.password || cfg.connectionString || ''))) + '|' + dias;
+  const hit = cache.get(ck);
   if (hit && hit.t > Date.now() - 60000) return json(hit.j);
   try {
     const j = await leer(cfg, dias);
-    cache.set(dias, { t: Date.now(), j });
+    cache.set(ck, { t: Date.now(), j });
     return json(j);
   } catch (e) {
     const m = String(e && e.message || e);
     const retirado = /not permitted to log in|permission denied for schema/i.test(m);
-    return json({ error: retirado ? 'acceso_retirado' : 'conexion', msg: m.slice(0, 300) }, 502);
+    const malPass = /password authentication failed|tenant or user not found/i.test(m);
+    return json({ error: retirado ? 'acceso_retirado' : malPass ? 'contrasena' : 'conexion', msg: m.slice(0, 300) }, 502);
   }
 };
 
