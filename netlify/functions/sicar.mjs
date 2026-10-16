@@ -3,7 +3,7 @@
 //
 // Solo panel (Authorization: Bearer <token de GitHub del panel>, igual que Pedidos y Visitas):
 //   POST /api/sicar { url | host+password, dias }  (lo que manda el panel)
-//   GET /api/sicar?dias=90  → { ok, estado, ventas:[[fecha,ticket,clave,cantidad,importe,sucursal,desc]], dias:{…}, pagos:[…] }
+//   GET /api/sicar?dias=90  (dias=0 → todo, desde la primera venta)  → { ok, estado, ventas:[[fecha,ticket,clave,cantidad,importe,sucursal,desc]], dias:{…}, pagos:[…] }
 //
 // Configuración en Netlify (Site configuration → Environment variables). La contraseña NUNCA va en el código:
 //   SICAR_PG_PASSWORD  la contraseña que dio Emiliano            (obligatoria)
@@ -55,17 +55,20 @@ async function leer(cfg, dias) {
   const c = new pg.Client({ ...cfg, connectionTimeoutMillis: 15000, statement_timeout: 50000, application_name: 'denmor-panel' });
   await c.connect();
   try {
+    // dias = 0 → toda la historia (desde la primera venta)
     const desde = `current_date - ${dias}`;
+    const fV = dias ? `and v.fecha >= ${desde}` : '';
+    const fD = dias ? `where dia >= ${desde}` : '';
     const [est, ventas, porDia, pagos] = await Promise.all([
       c.query(`select * from denmor.sucursal_estado order by leido_en desc nulls last limit 1`),
       c.query(`select to_char(v.fecha,'YYYY-MM-DD"T"HH24:MI:SS') f, v.ven_id::text t, coalesce(d.clave,'') k, d.cantidad::float8 q, d.importe::float8 i, left(coalesce(d.descripcion,''),80) n
                  from denmor.venta v join denmor.venta_detalle d on d.ven_id = v.ven_id
-                where v.status = 1 and coalesce(d.borrado,0) <> 1 and v.fecha >= ${desde}
+                where v.status = 1 and coalesce(d.borrado,0) <> 1 ${fV}
                 order by v.fecha, d.orden`),
-      c.query(`select to_char(dia,'YYYY-MM-DD') d, ventas::int v, total::float8 t, piezas::float8 p from denmor.venta_dia where dia >= ${desde} order by dia`),
+      c.query(`select to_char(dia,'YYYY-MM-DD') d, ventas::int v, total::float8 t, piezas::float8 p from denmor.venta_dia ${fD} order by dia`),
       c.query(`select to_char(v.fecha,'YYYY-MM-DD') d, coalesce(p.tipo,'Otro') tipo, sum(p.total)::float8 t
                  from denmor.venta v join denmor.venta_pago p on p.ven_id = v.ven_id
-                where v.status = 1 and v.fecha >= ${desde} group by 1, 2 order by 1`),
+                where v.status = 1 ${fV} group by 1, 2 order by 1`),
     ]);
     const e = est.rows[0] || null;
     return {
@@ -112,7 +115,8 @@ export default async (req) => {
     cfg = conexion();
     if (!cfg) return json({ error: 'sin_config', msg: 'Pega en el panel los datos de conexión de MAKMEX' }, 503);
   }
-  const dias = Math.min(400, Math.max(1, parseInt((body && body.dias) || new URL(req.url).searchParams.get('dias') || '90', 10) || 90));
+  const dRaw = parseInt(body && body.dias != null ? body.dias : (new URL(req.url).searchParams.get('dias') ?? '90'), 10);
+  const dias = dRaw === 0 ? 0 : Math.min(20000, Math.max(1, dRaw || 90)); // 0 = todo
   const ck = (await sha(cfg.host + '|' + cfg.user + '|' + (cfg.password || cfg.connectionString || ''))) + '|' + dias;
   const hit = cache.get(ck);
   if (hit && hit.t > Date.now() - 60000) return json(hit.j);
